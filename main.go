@@ -32,6 +32,21 @@ func save_list() {
 	}
 }
 
+func load_list() {
+	data, err := os.ReadFile(configFile)
+	if err != nil {
+		log.Printf("No such file - starting without config: %s", err)
+		return
+	}
+
+	if err = json.Unmarshal(data, &SiteList); err != nil {
+		log.Printf("Can't read file - starting without config: %s", err)
+		return
+	}
+
+	log.Printf(string(data))
+}
+
 func main() {
 	bot, err := tgbotapi.NewBotAPI(token)
 	if err != nil {
