@@ -104,7 +104,7 @@ func monitor(bot *tgbotapi.BotAPI) {
 	for {
 		save_list()
 
-		for site, _ := range SiteList {
+		for site := range SiteList {
 			response, err := httpClient.Get(site)
 			if err != nil {
 				SiteList[site] = 1
@@ -146,9 +146,57 @@ func monitor(bot *tgbotapi.BotAPI) {
 }
 
 func main() {
+	go func() {
+		fmt.Println(http.ListenAndServe(pprofListen, nil))
+	}()
+	log.Printf("Pprof interface: %s", pprofListen)
+
 	bot, err := tgbotapi.NewBotAPI(token)
 	if err != nil {
 		log.Panic(err)
 	}
 
+	log.Printf("Authorized on account %s", bot.Self.UserName)
+	log.Printf("Config file: %s", configFile)
+	log.Printf("ChatID: %v", chatID)
+	log.Printf("Starting monitoring thread")
+
+	go monitor(bot)
+
+	u := tgbotapi.NewUpdate(0)
+	u.Timeout = 60
+
+	bot.Send(tgbotapi.NewMessage(chatID, fmt.Sprint("Я в порядке, а вот сайты мониторинга: ", SiteList)))
+
+	updates := bot.GetUpdatesChan(u)
+
+	for update := range updates {
+		reply := ""
+
+		if update.Message == nil {
+			continue
+		}
+
+		log.Printf("[%s] %s", update.Message.From.UserName, update.Message.Text)
+
+		switch update.Message.Command() {
+		case "список":
+			sl, _ := json.Marshal(SiteList)
+			reply = string(sl)
+
+		case "добавление":
+			SiteList[update.Message.CommandArguments()] = 0
+			reply = "Добавил в мониторинг"
+
+		case "удаление":
+			delete(SiteList, update.Message.CommandArguments())
+			reply = "Удалил из мониторинга"
+
+		case "помощь":
+			reply = HelpMsg
+		}
+
+		msg := tgbotapi.NewMessage(update.Message.Chat.ID, reply)
+		bot.Send(msg)
+	}
 }
